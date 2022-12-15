@@ -29,6 +29,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
@@ -88,17 +89,17 @@ public final class RecordAccumulator {
     /**
      * Create a new record accumulator
      *
-     * @param logContext The log context used for logging
-     * @param batchSize The size to use when allocating {@link MemoryRecords} instances
-     * @param compression The compression codec for the records
-     * @param lingerMs An artificial delay time to add before declaring a records instance that isn't full ready for
-     *        sending. This allows time for more records to arrive. Setting a non-zero lingerMs will trade off some
-     *        latency for potentially better throughput due to more batching (and hence fewer, larger requests).
-     * @param retryBackoffMs An artificial delay time to retry the produce request upon receiving an error. This avoids
-     *        exhausting all retries in a short period of time.
-     * @param metrics The metrics
-     * @param time The time instance to use
-     * @param apiVersions Request API versions for current connected brokers
+     * @param logContext         The log context used for logging
+     * @param batchSize          The size to use when allocating {@link MemoryRecords} instances
+     * @param compression        The compression codec for the records
+     * @param lingerMs           An artificial delay time to add before declaring a records instance that isn't full ready for
+     *                           sending. This allows time for more records to arrive. Setting a non-zero lingerMs will trade off some
+     *                           latency for potentially better throughput due to more batching (and hence fewer, larger requests).
+     * @param retryBackoffMs     An artificial delay time to retry the produce request upon receiving an error. This avoids
+     *                           exhausting all retries in a short period of time.
+     * @param metrics            The metrics
+     * @param time               The time instance to use
+     * @param apiVersions        Request API versions for current connected brokers
      * @param transactionManager The shared transaction state object which tracks producer IDs, epochs, and sequence
      *                           numbers per partition.
      */
@@ -166,16 +167,16 @@ public final class RecordAccumulator {
      * The append result will contain the future metadata, and flag for whether the appended batch is full or a new batch is created
      * <p>
      *
-     * @param tp The topic/partition to which this record is being sent
-     * @param timestamp The timestamp of the record
-     * @param key The key for the record
-     * @param value The value for the record
-     * @param headers the Headers for the record
-     * @param callback The user-supplied callback to execute when the request is complete
-     * @param maxTimeToBlock The maximum time in milliseconds to block for buffer memory to be available
+     * @param tp              The topic/partition to which this record is being sent
+     * @param timestamp       The timestamp of the record
+     * @param key             The key for the record
+     * @param value           The value for the record
+     * @param headers         the Headers for the record
+     * @param callback        The user-supplied callback to execute when the request is complete
+     * @param maxTimeToBlock  The maximum time in milliseconds to block for buffer memory to be available
      * @param abortOnNewBatch A boolean that indicates returning before a new batch is created and
      *                        running the partitioner's onNewBatch method before trying to append again
-     * @param nowMs The current time, in milliseconds
+     * @param nowMs           The current time, in milliseconds
      */
     public RecordAppendResult append(TopicPartition tp,
                                      long timestamp,
@@ -211,6 +212,7 @@ public final class RecordAccumulator {
             byte maxUsableMagic = apiVersions.maxUsableProduceMagic();
             int size = Math.max(this.batchSize, AbstractRecords.estimateSizeInBytesUpperBound(maxUsableMagic, compression, key, value, headers));
             log.trace("Allocating a new {} byte message buffer for topic {} partition {} with remaining timeout {}ms", size, tp.topic(), tp.partition(), maxTimeToBlock);
+            // comment by systemKillerMurder: 开辟一块直接内存空间，减少用户态和内核态，以及用户空间和内核空间的copy
             buffer = free.allocate(size, maxTimeToBlock);
 
             // Update the current time in case the buffer allocation blocked above.
@@ -225,7 +227,7 @@ public final class RecordAccumulator {
                     // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
                     return appendResult;
                 }
-
+                // comment by systemKillerMurder: productRecord convert to productBatch
                 MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer, maxUsableMagic);
                 ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, nowMs);
                 FutureRecordMetadata future = Objects.requireNonNull(batch.tryAppend(timestamp, key, value, headers,
@@ -248,18 +250,18 @@ public final class RecordAccumulator {
     private MemoryRecordsBuilder recordsBuilder(ByteBuffer buffer, byte maxUsableMagic) {
         if (transactionManager != null && maxUsableMagic < RecordBatch.MAGIC_VALUE_V2) {
             throw new UnsupportedVersionException("Attempting to use idempotence with a broker which does not " +
-                "support the required message format (v2). The broker must be version 0.11 or later.");
+                    "support the required message format (v2). The broker must be version 0.11 or later.");
         }
         return MemoryRecords.builder(buffer, maxUsableMagic, compression, TimestampType.CREATE_TIME, 0L);
     }
 
     /**
-     *  Try to append to a ProducerBatch.
-     *
-     *  If it is full, we return null and a new batch is created. We also close the batch for record appends to free up
-     *  resources like compression buffers. The batch will be fully closed (ie. the record batch headers will be written
-     *  and memory records built) in one of the following cases (whichever comes first): right before send,
-     *  if it is expired, or when the producer is closed.
+     * Try to append to a ProducerBatch.
+     * <p>
+     * If it is full, we return null and a new batch is created. We also close the batch for record appends to free up
+     * resources like compression buffers. The batch will be fully closed (ie. the record batch headers will be written
+     * and memory records built) in one of the following cases (whichever comes first): right before send,
+     * if it is expired, or when the producer is closed.
      */
     private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers,
                                          Callback callback, Deque<ProducerBatch> deque, long nowMs) {
@@ -283,13 +285,13 @@ public final class RecordAccumulator {
     }
 
     public void maybeUpdateNextBatchExpiryTime(ProducerBatch batch) {
-        if (batch.createdMs + deliveryTimeoutMs  > 0) {
+        if (batch.createdMs + deliveryTimeoutMs > 0) {
             // the non-negative check is to guard us against potential overflow due to setting
             // a large value for deliveryTimeoutMs
             nextBatchExpiryTimeMs = Math.min(nextBatchExpiryTimeMs, batch.createdMs + deliveryTimeoutMs);
         } else {
             log.warn("Skipping next batch expiry time update due to addition overflow: "
-                + "batch.createMs={}, deliveryTimeoutMs={}", batch.createdMs, deliveryTimeoutMs);
+                    + "batch.createMs={}, deliveryTimeoutMs={}", batch.createdMs, deliveryTimeoutMs);
         }
     }
 
@@ -339,6 +341,7 @@ public final class RecordAccumulator {
 
     /**
      * Split the big batch that has been rejected and reenqueue the split batches in to the accumulator.
+     *
      * @return the number of split batches.
      */
     public int splitAndReenqueue(ProducerBatch bigBatch) {
@@ -346,7 +349,7 @@ public final class RecordAccumulator {
         // is bigger. There are several different ways to do the reset. We chose the most conservative one to ensure
         // the split doesn't happen too often.
         CompressionRatioEstimator.setEstimation(bigBatch.topicPartition.topic(), compression,
-                                                Math.max(1.0f, (float) bigBatch.compressionRatio()));
+                Math.max(1.0f, (float) bigBatch.compressionRatio()));
         Deque<ProducerBatch> dq = bigBatch.split(this.batchSize);
         int numSplitBatches = dq.size();
         Deque<ProducerBatch> partitionDequeue = getOrCreateDeque(bigBatch.topicPartition);
@@ -381,11 +384,11 @@ public final class RecordAccumulator {
         // When we are requeing and have enabled idempotence, the reenqueued batch must always have a sequence.
         if (batch.baseSequence() == RecordBatch.NO_SEQUENCE)
             throw new IllegalStateException("Trying to re-enqueue a batch which doesn't have a sequence even " +
-                "though idempotency is enabled.");
+                    "though idempotency is enabled.");
 
         if (transactionManager.nextBatchBySequence(batch.topicPartition) == null)
             throw new IllegalStateException("We are re-enqueueing a batch which is not tracked as part of the in flight " +
-                "requests. batch.topicPartition: " + batch.topicPartition + "; batch.baseSequence: " + batch.baseSequence());
+                    "requests. batch.topicPartition: " + batch.topicPartition + "; batch.baseSequence: " + batch.baseSequence());
 
         ProducerBatch firstBatchInQueue = deque.peekFirst();
         if (firstBatchInQueue != null && firstBatchInQueue.hasSequence() && firstBatchInQueue.baseSequence() < batch.baseSequence()) {
@@ -402,7 +405,7 @@ public final class RecordAccumulator {
                 orderedBatches.add(deque.pollFirst());
 
             log.debug("Reordered incoming batch with sequence {} for partition {}. It was placed in the queue at " +
-                "position {}", batch.baseSequence(), batch.topicPartition, orderedBatches.size());
+                    "position {}", batch.baseSequence(), batch.topicPartition, orderedBatches.size());
             // Either we have reached a point where there are batches without a sequence (ie. never been drained
             // and are hence in order by default), or the batch at the front of the queue has a sequence greater
             // than the incoming batch. This is the right place to add the incoming batch.
@@ -524,7 +527,7 @@ public final class RecordAccumulator {
 
             int firstInFlightSequence = transactionManager.firstInFlightSequence(first.topicPartition);
             if (firstInFlightSequence != RecordBatch.NO_SEQUENCE && first.hasSequence()
-                && first.baseSequence() != firstInFlightSequence)
+                    && first.baseSequence() != firstInFlightSequence)
                 // If the queued batch already has an assigned sequence, then it is being retried.
                 // In this case, we wait until the next immediate batch is ready and drain that.
                 // We only move on when the next in line batch is complete (either successfully or due to
@@ -575,7 +578,7 @@ public final class RecordAccumulator {
 
                     boolean isTransactional = transactionManager != null && transactionManager.isTransactional();
                     ProducerIdAndEpoch producerIdAndEpoch =
-                        transactionManager != null ? transactionManager.producerIdAndEpoch() : null;
+                            transactionManager != null ? transactionManager.producerIdAndEpoch() : null;
                     ProducerBatch batch = deque.pollFirst();
                     if (producerIdAndEpoch != null && !batch.hasSequence()) {
                         // If the the producer id/epoch of the partition do not match the latest one
@@ -595,8 +598,8 @@ public final class RecordAccumulator {
                         batch.setProducerState(producerIdAndEpoch, transactionManager.sequenceNumber(batch.topicPartition), isTransactional);
                         transactionManager.incrementSequenceNumber(batch.topicPartition, batch.recordCount);
                         log.debug("Assigned producerId {} and producerEpoch {} to batch with base sequence " +
-                                "{} being sent to partition {}", producerIdAndEpoch.producerId,
-                            producerIdAndEpoch.epoch, batch.baseSequence(), tp);
+                                        "{} being sent to partition {}", producerIdAndEpoch.producerId,
+                                producerIdAndEpoch.epoch, batch.baseSequence(), tp);
 
                         transactionManager.addInFlightBatch(batch);
                     }
@@ -616,9 +619,9 @@ public final class RecordAccumulator {
      * size on a per-node basis. This method attempts to avoid choosing the same topic-node over and over.
      *
      * @param cluster The current cluster metadata
-     * @param nodes The list of node to drain
+     * @param nodes   The list of node to drain
      * @param maxSize The maximum number of bytes to drain
-     * @param now The current unix time in milliseconds
+     * @param now     The current unix time in milliseconds
      * @return A list of {@link ProducerBatch} for each node specified with total size less than the requested maxSize.
      */
     public Map<Integer, List<ProducerBatch>> drain(Cluster cluster, Set<Node> nodes, int maxSize, long now) {
@@ -679,7 +682,7 @@ public final class RecordAccumulator {
 
     /**
      * Are there any threads currently waiting on a flush?
-     *
+     * <p>
      * package private for test
      */
     boolean flushInProgress() {

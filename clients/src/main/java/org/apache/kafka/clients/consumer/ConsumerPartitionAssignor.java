@@ -38,6 +38,7 @@ import org.apache.kafka.common.TopicPartition;
  * userData in the returned Subscription. For example, to have a rack-aware assignor, an implementation
  * can use this user data to forward the rackId belonging to each member.
  */
+//comment by SystemKillerMurder 消费者的分区分配策略
 public interface ConsumerPartitionAssignor {
 
     /**
@@ -59,6 +60,7 @@ public interface ConsumerPartitionAssignor {
      * @return A map from the members to their respective assignments. This should have one entry
      *         for each member in the input subscription map.
      */
+    //comment by SystemKillerMurder 消费者分区分配区域
     GroupAssignment assign(Cluster metadata, GroupSubscription groupSubscription);
 
     /**

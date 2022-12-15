@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -95,6 +95,7 @@ object AdminUtils extends Logging {
    * situation where the number of replicas is the same as the number of racks and each rack has the same number of
    * brokers, it guarantees that the replica distribution is even across brokers and racks.
    * </p>
+   *
    * @return a Map from partition id to replica ids
    * @throws AdminOperationException If rack information is supplied but it is incomplete, or if it is not possible to
    *                                 assign each replica to a unique rack.
@@ -122,29 +123,42 @@ object AdminUtils extends Logging {
     }
   }
 
+
+  //comment by SystemKillerMurder topic 分区底层逻辑代码
   private def assignReplicasToBrokersRackUnaware(nPartitions: Int,
                                                  replicationFactor: Int,
                                                  brokerList: Seq[Int],
                                                  fixedStartIndex: Int,
                                                  startPartitionId: Int): Map[Int, Seq[Int]] = {
+    //分配 <key:partition,value:[brokerIds]>
     val ret = mutable.Map[Int, Seq[Int]]()
+    //获取从上游传来的 brokerId
     val brokerArray = brokerList.toArray
+    //初始分配的时候 fixStartIndex == -1
     val startIndex = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokerArray.length)
+    //初始分配的时候 startPartitionId == -1 也就是说 初始的时候 从分区0 开始分配
     var currentPartitionId = math.max(0, startPartitionId)
+    //下一个分区 分配 brokerId 的步长 为的是 分区
     var nextReplicaShift = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokerArray.length)
+    //遍历分区数
     for (_ <- 0 until nPartitions) {
       if (currentPartitionId > 0 && (currentPartitionId % brokerArray.length == 0))
         nextReplicaShift += 1
       val firstReplicaIndex = (currentPartitionId + startIndex) % brokerArray.length
       val replicaBuffer = mutable.ArrayBuffer(brokerArray(firstReplicaIndex))
-      for (j <- 0 until replicationFactor - 1)
+      //遍历分区中的副本然后将分区副本匹配的 brokerId 匹配在replicaBuffer中
+      for (j <- 0 until replicationFactor - 1) {
+        //replicaIndex 真正 计算 partition 的
         replicaBuffer += brokerArray(replicaIndex(firstReplicaIndex, nextReplicaShift, j, brokerArray.length))
+      }
       ret.put(currentPartitionId, replicaBuffer)
+      //分区序号是从1 开始进行累加的。
       currentPartitionId += 1
     }
     ret
   }
 
+  //comment by SystemKillerMurder topic 分区底层逻辑代码 考虑到机架的逻辑
   private def assignReplicasToBrokersRackAware(nPartitions: Int,
                                                replicationFactor: Int,
                                                brokerMetadatas: Seq[BrokerMetadata],
@@ -179,7 +193,7 @@ object AdminUtils extends Logging {
           //    that do not have any replica, or
           // 2. the broker has already assigned a replica AND there is one or more brokers that do not have replica assigned
           if ((!racksWithReplicas.contains(rack) || racksWithReplicas.size == numRacks)
-              && (!brokersWithReplicas.contains(broker) || brokersWithReplicas.size == numBrokers)) {
+            && (!brokersWithReplicas.contains(broker) || brokersWithReplicas.size == numBrokers)) {
             replicaBuffer += broker
             racksWithReplicas += rack
             brokersWithReplicas += broker
@@ -195,20 +209,20 @@ object AdminUtils extends Logging {
   }
 
   /**
-    * Given broker and rack information, returns a list of brokers alternated by the rack. Assume
-    * this is the rack and its brokers:
-    *
-    * rack1: 0, 1, 2
-    * rack2: 3, 4, 5
-    * rack3: 6, 7, 8
-    *
-    * This API would return the list of 0, 3, 6, 1, 4, 7, 2, 5, 8
-    *
-    * This is essential to make sure that the assignReplicasToBrokers API can use such list and
-    * assign replicas to brokers in a simple round-robin fashion, while ensuring an even
-    * distribution of leader and replica counts on each broker and that replicas are
-    * distributed to all racks.
-    */
+   * Given broker and rack information, returns a list of brokers alternated by the rack. Assume
+   * this is the rack and its brokers:
+   *
+   * rack1: 0, 1, 2
+   * rack2: 3, 4, 5
+   * rack3: 6, 7, 8
+   *
+   * This API would return the list of 0, 3, 6, 1, 4, 7, 2, 5, 8
+   *
+   * This is essential to make sure that the assignReplicasToBrokers API can use such list and
+   * assign replicas to brokers in a simple round-robin fashion, while ensuring an even
+   * distribution of leader and replica counts on each broker and that replicas are
+   * distributed to all racks.
+   */
   private[admin] def getRackAlternatedBrokerList(brokerRackMap: Map[Int, String]): IndexedSeq[Int] = {
     val brokersIteratorByRack = getInverseMap(brokerRackMap).map { case (rack, brokers) =>
       (rack, brokers.iterator)

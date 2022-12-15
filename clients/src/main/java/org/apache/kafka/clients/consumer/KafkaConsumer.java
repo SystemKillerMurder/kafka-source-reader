@@ -1241,7 +1241,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     if (fetcher.sendFetches() > 0 || client.hasPendingRequests()) {
                         client.transmitSends();
                     }
-
+                    // comment by systemKillerMurder 在真正进行消费之前的拦截器
                     return this.interceptors.onConsume(new ConsumerRecords<>(records));
                 }
             } while (timer.notExpired());
@@ -1275,6 +1275,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
 
         // send any new fetches (won't resend pending fetches)
+        // 拉取分区数据
         fetcher.sendFetches();
 
         // We do not want to be stuck blocking in poll if we are missing some positions

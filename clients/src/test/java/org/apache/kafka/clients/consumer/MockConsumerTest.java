@@ -54,6 +54,7 @@ public class MockConsumerTest {
         ConsumerRecord<String, String> rec2 = new ConsumerRecord<>("test", 0, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, "key2", "value2");
         consumer.addRecord(rec1);
         consumer.addRecord(rec2);
+        //只拉取一次
         ConsumerRecords<String, String> recs = consumer.poll(Duration.ofMillis(1));
         Iterator<ConsumerRecord<String, String>> iter = recs.iterator();
         assertEquals(rec1, iter.next());
@@ -61,6 +62,7 @@ public class MockConsumerTest {
         assertFalse(iter.hasNext());
         final TopicPartition tp = new TopicPartition("test", 0);
         assertEquals(2L, consumer.position(tp));
+        //同步提交
         consumer.commitSync();
         assertEquals(2L, consumer.committed(Collections.singleton(tp)).get(tp).offset());
     }
@@ -118,6 +120,14 @@ public class MockConsumerTest {
         consumer.poll(Duration.ofMillis(1));
         consumer.resume(testPartitionList);
         ConsumerRecords<String, String> recordsSecondPoll = consumer.poll(Duration.ofMillis(1));
+        //不太明白 partitions中可以表示所有的 分区 却不能代表所有的 topic
+        for (TopicPartition partition : recordsSecondPoll.partitions()) {
+            //按照分区的问题去消费
+            for (ConsumerRecord<String, String> record : recordsSecondPoll.records(partition)) {
+
+            }
+        }
+
         assertThat(recordsSecondPoll.count(), is(1));
     }
 

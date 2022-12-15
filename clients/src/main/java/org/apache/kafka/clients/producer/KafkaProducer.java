@@ -929,6 +929,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         " to class " + producerConfig.getClass(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG).getName() +
                         " specified in value.serializer", cce);
             }
+            ////comment by SystemKillerMurder 确定投递的分区
             int partition = partition(record, serializedKey, serializedValue, cluster);
             tp = new TopicPartition(record.topic(), partition);
 

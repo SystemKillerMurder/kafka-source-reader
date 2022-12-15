@@ -89,7 +89,9 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         return this.subscriptions.assignedPartitions();
     }
 
-    /** Simulate a rebalance event. */
+    /**
+     * Simulate a rebalance event.
+     */
     public synchronized void rebalance(Collection<TopicPartition> newAssignment) {
         // TODO: Rebalance callbacks
         this.records.clear();
@@ -112,9 +114,9 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         committed.clear();
         this.subscriptions.subscribe(pattern, listener);
         Set<String> topicsToSubscribe = new HashSet<>();
-        for (String topic: partitions.keySet()) {
+        for (String topic : partitions.keySet()) {
             if (pattern.matcher(topic).matches() &&
-                !subscriptions.subscription().contains(topic))
+                    !subscriptions.subscription().contains(topic))
                 topicsToSubscribe.add(topic);
         }
         ensureNotClosed();
@@ -192,6 +194,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
                 updateFetchPosition(tp);
 
         // update the consumed offset
+        // systemMurderKiller 提交上一次的消费位移
         final Map<TopicPartition, List<ConsumerRecord<K, V>>> results = new HashMap<>();
         final List<TopicPartition> toClear = new ArrayList<>();
 
@@ -317,9 +320,9 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         ensureNotClosed();
 
         return partitions.stream()
-            .filter(committed::containsKey)
-            .collect(Collectors.toMap(tp -> tp, tp -> subscriptions.isAssigned(tp) ?
-                committed.get(tp) : new OffsetAndMetadata(0)));
+                .filter(committed::containsKey)
+                .collect(Collectors.toMap(tp -> tp, tp -> subscriptions.isAssigned(tp) ?
+                        committed.get(tp) : new OffsetAndMetadata(0)));
     }
 
     @Override
@@ -466,6 +469,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     /**
      * Schedule a task to be executed during a poll(). One enqueued task will be executed per {@link #poll(Duration)}
      * invocation. You can use this repeatedly to mock out multiple responses to poll invocations.
+     *
      * @param task the task to be executed
      */
     public synchronized void schedulePollTask(Runnable task) {
@@ -475,7 +479,8 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     public synchronized void scheduleNopPollTask() {
-        schedulePollTask(() -> { });
+        schedulePollTask(() -> {
+        });
     }
 
     public synchronized Set<TopicPartition> paused() {
@@ -527,7 +532,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch,
-            Duration timeout) {
+                                                                   Duration timeout) {
         return offsetsForTimes(timestampsToSearch);
     }
 

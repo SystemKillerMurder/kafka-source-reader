@@ -337,6 +337,8 @@ class ReplicaManager(val config: KafkaConfig,
     debug("Request key %s unblocked %d ElectLeader.".format(key.keyLabel, completed))
   }
 
+
+  //systemKillerMurder comment isr集合判断的两个定时任务
   def startup(): Unit = {
     // start ISR expiration thread
     // A follower can lag behind leader for up to config.replicaLagTimeMaxMs x 1.5 before it is removed from ISR

@@ -84,6 +84,7 @@ public class RangeAssignor extends AbstractPartitionAssignor {
     }
 
     @Override
+    //comment by SystemKillerMurder topic 分区分配 实现愿
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {
         Map<String, List<MemberInfo>> consumersPerTopic = consumersPerTopic(subscriptions);
